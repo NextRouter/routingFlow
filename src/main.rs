@@ -5,6 +5,7 @@ mod prometheus;
 use anyhow::Result;
 use config::Config;
 use monitor::BandwidthMonitor;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,8 +15,26 @@ async fn main() -> Result<()> {
     // Create monitor
     let monitor = BandwidthMonitor::new(config);
 
-    // Run monitoring
-    monitor.run_monitor().await?;
+    // Monitoring interval (10 seconds)
+    let interval = Duration::from_secs(10);
 
-    Ok(())
+    println!(
+        "Starting bandwidth monitoring loop (interval: {:?})...\n",
+        interval
+    );
+    println!("Press Ctrl+C to stop\n");
+
+    // Run monitoring loop
+    loop {
+        match monitor.run_monitor().await {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error during monitoring: {}", e);
+            }
+        }
+
+        // Wait before next check
+        tokio::time::sleep(interval).await;
+        println!("\n{}\n", "=".repeat(50));
+    }
 }
