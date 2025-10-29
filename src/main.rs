@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     let monitor = BandwidthMonitor::new(config);
 
     // Monitoring interval (10 seconds)
-    let interval = Duration::from_secs(10);
+    let interval = Duration::from_secs(1);
 
     println!(
         "Starting bandwidth monitoring loop (interval: {:?})...\n",
