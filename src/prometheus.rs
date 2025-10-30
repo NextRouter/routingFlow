@@ -50,6 +50,9 @@ impl PrometheusClient {
     /// Query Prometheus and parse response
     async fn query(&self, query: &str) -> Result<PrometheusResponse> {
         let url = format!("{}/api/v1/query", self.base_url);
+
+        println!("[DEBUG] Prometheus Query: {}", query);
+
         let response = self
             .client
             .get(&url)
@@ -62,6 +65,11 @@ impl PrometheusClient {
             .json()
             .await
             .context("Failed to parse Prometheus response")?;
+
+        println!("[DEBUG] Result count: {}", result.data.result.len());
+        if result.data.result.is_empty() {
+            println!("[DEBUG] No results found for query: {}", query);
+        }
 
         Ok(result)
     }

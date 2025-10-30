@@ -70,25 +70,35 @@ impl BandwidthMonitor {
             bandwidth_map.insert(metric.interface.clone(), metric.value);
         }
 
-        // Get actual network usage for all NICs
-        let nics = vec![
-            self.config.nic_config.wan0.clone(),
-            self.config.nic_config.wan1.clone(),
-        ];
+        // Get actual network usage for all WANs (use wan0, wan1 as per Prometheus metrics)
+        let wan_nics = vec!["wan0".to_string(), "wan1".to_string()];
 
-        let network_totals = self.prometheus_client.get_all_network_totals(&nics).await?;
+        let network_totals = self
+            .prometheus_client
+            .get_all_network_totals(&wan_nics)
+            .await?;
 
         // Compare and build results
         let mut comparisons = Vec::new();
 
-        for (nic, (rx, tx)) in network_totals {
-            let estimated = bandwidth_map.get(&nic).copied().unwrap_or(0.0);
+        for (wan_nic, (rx, tx)) in network_totals {
+            // Map wan0 -> eth0, wan1 -> eth1 for display
+            let physical_interface = match wan_nic.as_str() {
+                "wan0" => &self.config.nic_config.wan0,
+                "wan1" => &self.config.nic_config.wan1,
+                _ => &wan_nic,
+            };
+
+            let estimated = bandwidth_map
+                .get(physical_interface)
+                .copied()
+                .unwrap_or(0.0);
             let actual_total = rx + tx;
             let exceeded = actual_total > estimated;
 
             comparisons.push(BandwidthComparison {
-                nic: nic.clone(),
-                interface: nic.clone(),
+                nic: wan_nic.clone(),
+                interface: physical_interface.clone(),
                 estimated_bandwidth: estimated,
                 actual_rx: rx,
                 actual_tx: tx,
