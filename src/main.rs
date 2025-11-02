@@ -217,7 +217,14 @@ async fn main() -> Result<()> {
                 println!("  Top IPs by RX traffic:");
                 for (ip, rx) in ip_rx_list[0..1].iter() {
                     println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
-                    let switch_url = format!("http://localhost:32599/switch?ip={}&nic=wan0", ip);
+                    let target_wan = wan_to_nic
+                        .iter()
+                        .find(|(_wan, nic_name)| *nic_name == nic)
+                        .map(|(wan, _)| wan.clone())
+                        .unwrap_or_else(|| "wan0".to_string());
+
+                    let switch_url =
+                        format!("http://localhost:32599/switch?ip={}&nic={}", ip, target_wan);
                     if let Err(e) = client.get(&switch_url).send().await {
                         eprintln!("    Failed to switch IP {}: {}", ip, e);
                     } else {
