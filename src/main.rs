@@ -225,10 +225,23 @@ async fn main() -> Result<()> {
 
                     let switch_url =
                         format!("http://localhost:32599/switch?ip={}&nic={}", ip, target_wan);
-                    if let Err(e) = client.get(&switch_url).send().await {
-                        eprintln!("    Failed to switch IP {}: {}", ip, e);
-                    } else {
-                        println!("    Switched {} to wan0", ip);
+                    println!(
+                        "    Attempting to switch {} to {} via: {}",
+                        ip, target_wan, switch_url
+                    );
+                    match client.get(&switch_url).send().await {
+                        Ok(response) => {
+                            let status = response.status();
+                            println!("    API Response Status: {}", status);
+                            if status.is_success() {
+                                println!("    ✓ Successfully switched {} to {}", ip, target_wan);
+                            } else {
+                                eprintln!("    ✗ API returned error status: {}", status);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("    ✗ Failed to reach API for IP {}: {}", ip, e);
+                        }
                     }
                 }
             }
