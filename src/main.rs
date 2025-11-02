@@ -262,6 +262,39 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
+                println!("  History of IPs switched on this NIC:");
+
+                // Track recently switched IPs (within last 30 seconds)
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
+                // Query for recently switched IPs from Prometheus
+                let history_query = format!(
+                    r#"routing_flow_switch_timestamp{{interface="{}"}} > {}"#,
+                    nic,
+                    now - 30
+                );
+
+                match query_prometheus(&client, &history_query).await {
+                    Ok(history_results) => {
+                        if history_results.is_empty() {
+                            println!("    (No recent switches in the last 30 seconds)");
+                        } else {
+                            for result in history_results {
+                                if let Some(ip) = result.metric.get("ip_address") {
+                                    let timestamp: f64 = result.value.1.parse().unwrap_or(0.0);
+                                    let age = now as f64 - timestamp;
+                                    println!("    {} - {:.1}s ago", ip, age);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("    ✗ Failed to fetch switch history: {}", e);
+                    }
+                }
             }
             println!();
         }
