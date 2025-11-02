@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
                     .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
                 println!("  Top IPs by RX traffic:");
-                for (ip, rx) in ip_rx_list {
+                for (ip, rx) in ip_rx_list[0..1].iter() {
                     println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
                 }
             }
