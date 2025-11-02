@@ -292,44 +292,32 @@ async fn main() -> Result<()> {
                 }
 
                 println!();
-                println!("  History of IPs switched on this NIC:");
-
-                // Track recently switched IPs (within last 30 seconds)
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
-
-                // Filter history for this NIC and last 30 seconds
-                let recent_switches: Vec<_> = switch_history
-                    .iter()
-                    .filter(|record| {
-                        // Find the NIC for this switch target
-                        if let Some(switched_nic) = wan_to_nic.get(&record.target_wan) {
-                            switched_nic == nic && (now - record.timestamp) <= 30
-                        } else {
-                            false
-                        }
-                    })
-                    .collect();
-
-                if recent_switches.is_empty() {
-                    println!("    (No recent switches in the last 30 seconds)");
-                } else {
-                    for record in recent_switches {
-                        let age = now - record.timestamp;
-                        println!("    {} → {} - {}s ago", record.ip, record.target_wan, age);
-                    }
-                }
             }
         }
 
-        // Clean up old records (older than 30 seconds)
+        // Display consolidated switch history (outside the NIC loop)
+        println!("History of IPs switched:");
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        switch_history.retain(|record| (now - record.timestamp) <= 30);
+
+        if switch_history.is_empty() {
+            println!("  (No recent switches in the last 30 seconds)");
+        } else {
+            for record in &switch_history {
+                let age = now - record.timestamp;
+                println!("  {} → {} - {}s ago", record.ip, record.target_wan, age);
+            }
+        }
+
+        // Clean up old records (older than 10 seconds)
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        switch_history.retain(|record| (now - record.timestamp) <= 10);
 
         println!("\n=== Waiting 1 second before next scan ===\n");
         tokio::time::sleep(Duration::from_millis(1000)).await;
