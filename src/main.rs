@@ -331,7 +331,7 @@ async fn main() -> Result<()> {
             .as_secs();
         switch_history.retain(|record| (now - record.timestamp) <= 30);
 
-        println!("\n=== Waiting 0.1 seconds before next scan ===\n");
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        println!("\n=== Waiting 1 second before next scan ===\n");
+        tokio::time::sleep(Duration::from_millis(1000)).await;
     }
 }
