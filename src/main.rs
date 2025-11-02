@@ -187,7 +187,38 @@ async fn main() -> Result<()> {
                 stats.tx_bps + stats.rx_bps,
                 (stats.tx_bps + stats.rx_bps) / 1_000_000.0
             );
-            println!("Bool : {}", stats.rx_bps >= stats.tcp_bandwidth);
+            let is_rx_dominant = stats.rx_bps >= stats.tcp_bandwidth;
+            println!("Bool : {}", is_rx_dominant);
+
+            if is_rx_dominant {
+                // Find all IPs mapped to this NIC and their RX traffic
+                let mut ip_rx_list: Vec<(String, f64)> = Vec::new();
+
+                for result in &network_results {
+                    if let (Some(metric_name), Some(ip)) = (
+                        result.metric.get("__name__"),
+                        result.metric.get("ip_address"),
+                    ) {
+                        if metric_name == "network_ip_rx_bps" {
+                            if let Some(mapped_nic) = ip_to_nic.get(ip) {
+                                if mapped_nic == nic {
+                                    let value: f64 = result.value.1.parse().unwrap_or(0.0);
+                                    ip_rx_list.push((ip.clone(), value));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Sort by RX traffic (descending)
+                ip_rx_list
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+                println!("  Top IPs by RX traffic:");
+                for (ip, rx) in ip_rx_list {
+                    println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
+                }
+            }
             println!();
         }
     }
