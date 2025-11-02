@@ -231,6 +231,18 @@ async fn main() -> Result<()> {
                 for (ip, rx) in ip_rx_list[0..1].iter() {
                     println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
 
+                    // Skip if RX traffic is below threshold (1 Mbps = 1,000,000 bps)
+                    const MIN_TRAFFIC_THRESHOLD: f64 = 1_000_000.0;
+                    if *rx < MIN_TRAFFIC_THRESHOLD {
+                        println!(
+                            "    ⏭ Skipping {} - traffic ({:.2} Mbps) below threshold ({:.2} Mbps)",
+                            ip,
+                            rx / 1_000_000.0,
+                            MIN_TRAFFIC_THRESHOLD / 1_000_000.0
+                        );
+                        continue;
+                    }
+
                     // Check if this IP was recently switched (within 30 seconds)
                     let recently_switched = switch_history
                         .iter()
