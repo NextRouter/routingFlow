@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
                 stats.tx_bps + stats.rx_bps,
                 (stats.tx_bps + stats.rx_bps) / 1_000_000.0
             );
-            println!("Bool : {}", stats.tx_bps <= stats.tcp_bandwidth);
+            println!("Bool : {}", stats.tx_bps >= stats.tcp_bandwidth);
             println!();
         }
     }
