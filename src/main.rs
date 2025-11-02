@@ -223,6 +223,24 @@ async fn main() -> Result<()> {
                         .map(|(wan, _)| wan.clone())
                         .unwrap_or_else(|| "wan0".to_string());
 
+                    // Find the NIC with the highest TCP bandwidth
+                    let target_nic = nic_stats
+                        .iter()
+                        .filter(|(n, _)| *n != nic) // Exclude current NIC
+                        .max_by(|(_, a), (_, b)| {
+                            a.tcp_bandwidth
+                                .partial_cmp(&b.tcp_bandwidth)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(n, _)| n.clone())
+                        .unwrap_or_else(|| nic.clone());
+
+                    let target_wan = wan_to_nic
+                        .iter()
+                        .find(|(_wan, nic_name)| *nic_name == &target_nic)
+                        .map(|(wan, _)| wan.clone())
+                        .unwrap_or_else(|| "wan0".to_string());
+
                     let switch_url =
                         format!("http://localhost:32599/switch?ip={}&nic={}", ip, target_wan);
                     println!(
