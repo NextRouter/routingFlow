@@ -197,88 +197,96 @@ async fn main() -> Result<()> {
                     stats.tx_bps + stats.rx_bps,
                     (stats.tx_bps + stats.rx_bps) / 1_000_000.0
                 );
-                let is_rx_dominant = stats.rx_bps >= stats.tcp_bandwidth;
-                println!("Bool : {}", is_rx_dominant);
+                // Find all IPs mapped to this NIC and their RX traffic
+                let mut ip_rx_list: Vec<(String, f64)> = Vec::new();
 
-                if is_rx_dominant {
-                    // Find all IPs mapped to this NIC and their RX traffic
-                    let mut ip_rx_list: Vec<(String, f64)> = Vec::new();
-
-                    for result in &network_results {
-                        if let (Some(metric_name), Some(ip)) = (
-                            result.metric.get("__name__"),
-                            result.metric.get("ip_address"),
-                        ) {
-                            if metric_name == "network_ip_rx_bps" {
-                                if let Some(mapped_nic) = ip_to_nic.get(ip) {
-                                    if mapped_nic == nic {
-                                        let value: f64 = result.value.1.parse().unwrap_or(0.0);
-                                        ip_rx_list.push((ip.clone(), value));
-                                    }
+                for result in &network_results {
+                    if let (Some(metric_name), Some(ip)) = (
+                        result.metric.get("__name__"),
+                        result.metric.get("ip_address"),
+                    ) {
+                        if metric_name == "network_ip_rx_bps" {
+                            if let Some(mapped_nic) = ip_to_nic.get(ip) {
+                                if mapped_nic == nic {
+                                    let value: f64 = result.value.1.parse().unwrap_or(0.0);
+                                    ip_rx_list.push((ip.clone(), value));
                                 }
                             }
                         }
                     }
+                }
 
-                    // Sort by RX traffic (descending)
-                    ip_rx_list
-                        .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                // Sort by RX traffic (descending)
+                ip_rx_list
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-                    println!("  Top IPs by RX traffic:");
-                    for (ip, rx) in ip_rx_list[0..1].iter() {
-                        println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
+                println!("  Top IPs by RX traffic:");
 
-                        // Find the NIC with the highest TCP bandwidth
-                        let target_nic = nic_stats
-                            .iter()
-                            .filter(|(n, _)| *n != nic) // Exclude current NIC
-                            .max_by(|(_, a), (_, b)| {
-                                a.tcp_bandwidth
-                                    .partial_cmp(&b.tcp_bandwidth)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                            .map(|(n, _)| n.clone())
-                            .unwrap_or_else(|| nic.clone());
+                // Get current timestamp for checking recent switches
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
 
-                        let target_wan = wan_to_nic
-                            .iter()
-                            .find(|(_wan, nic_name)| *nic_name == &target_nic)
-                            .map(|(wan, _)| wan.clone())
-                            .unwrap_or_else(|| "wan0".to_string());
+                for (ip, rx) in ip_rx_list[0..1].iter() {
+                    println!("    {} - {:.2} bps ({:.2} Mbps)", ip, rx, rx / 1_000_000.0);
 
-                        let switch_url =
-                            format!("http://localhost:32599/switch?ip={}&nic={}", ip, target_wan);
+                    // Check if this IP was recently switched (within 30 seconds)
+                    let recently_switched = switch_history
+                        .iter()
+                        .any(|record| &record.ip == ip && (now - record.timestamp) <= 30);
+
+                    if recently_switched {
                         println!(
-                            "    Attempting to switch {} to {} via: {}",
-                            ip, target_wan, switch_url
+                            "    ⏭ Skipping {} - already switched within last 30 seconds",
+                            ip
                         );
-                        match client.get(&switch_url).send().await {
-                            Ok(response) => {
-                                let status = response.status();
-                                println!("    API Response Status: {}", status);
-                                if status.is_success() {
-                                    println!(
-                                        "    ✓ Successfully switched {} to {}",
-                                        ip, target_wan
-                                    );
+                        continue;
+                    }
 
-                                    // Record the switch with timestamp
-                                    let now = SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_secs();
-                                    switch_history.push(SwitchRecord {
-                                        ip: ip.clone(),
-                                        target_wan: target_wan.clone(),
-                                        timestamp: now,
-                                    });
-                                } else {
-                                    eprintln!("    ✗ API returned error status: {}", status);
-                                }
+                    // Find the NIC with the highest TCP bandwidth
+                    let target_nic = nic_stats
+                        .iter()
+                        .filter(|(n, _)| *n != nic) // Exclude current NIC
+                        .max_by(|(_, a), (_, b)| {
+                            a.tcp_bandwidth
+                                .partial_cmp(&b.tcp_bandwidth)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(n, _)| n.clone())
+                        .unwrap_or_else(|| nic.clone());
+
+                    let target_wan = wan_to_nic
+                        .iter()
+                        .find(|(_wan, nic_name)| *nic_name == &target_nic)
+                        .map(|(wan, _)| wan.clone())
+                        .unwrap_or_else(|| "wan0".to_string());
+
+                    let switch_url =
+                        format!("http://localhost:32599/switch?ip={}&nic={}", ip, target_wan);
+                    println!(
+                        "    Attempting to switch {} to {} via: {}",
+                        ip, target_wan, switch_url
+                    );
+                    match client.get(&switch_url).send().await {
+                        Ok(response) => {
+                            let status = response.status();
+                            println!("    API Response Status: {}", status);
+                            if status.is_success() {
+                                println!("    ✓ Successfully switched {} to {}", ip, target_wan);
+
+                                // Record the switch with timestamp
+                                switch_history.push(SwitchRecord {
+                                    ip: ip.clone(),
+                                    target_wan: target_wan.clone(),
+                                    timestamp: now,
+                                });
+                            } else {
+                                eprintln!("    ✗ API returned error status: {}", status);
                             }
-                            Err(e) => {
-                                eprintln!("    ✗ Failed to reach API for IP {}: {}", ip, e);
-                            }
+                        }
+                        Err(e) => {
+                            eprintln!("    ✗ Failed to reach API for IP {}: {}", ip, e);
                         }
                     }
                 }
