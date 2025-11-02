@@ -139,15 +139,19 @@ async fn main() -> Result<()> {
     let network_results = query_prometheus(&client, network_query).await?;
 
     println!("\nDebug: Found {} network results", network_results.len());
-    
+
     // Process network data (aggregate by NIC using IP mappings)
     for result in &network_results {
         let metric_name = result.metric.get("__name__");
         let ip = result.metric.get("ip");
-        
-        println!("Debug: metric={:?}, ip={:?}, labels={:?}", 
-                 metric_name, ip, result.metric.keys().collect::<Vec<_>>());
-        
+
+        println!(
+            "Debug: metric={:?}, ip={:?}, labels={:?}",
+            metric_name,
+            ip,
+            result.metric.keys().collect::<Vec<_>>()
+        );
+
         if let (Some(metric_name), Some(ip)) =
             (result.metric.get("__name__"), result.metric.get("ip"))
         {
@@ -167,7 +171,7 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     println!("\nDebug: IP to NIC mappings: {:?}", ip_to_nic);
 
     // Display results
