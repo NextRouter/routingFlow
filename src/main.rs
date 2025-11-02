@@ -324,12 +324,12 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Clean up old records (older than 10 seconds)
+        // Clean up old records (older than 30 seconds)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        switch_history.retain(|record| (now - record.timestamp) <= 10);
+        switch_history.retain(|record| (now - record.timestamp) <= 30);
 
         println!("\n=== Waiting 1 second before next scan ===\n");
         tokio::time::sleep(Duration::from_millis(1000)).await;
