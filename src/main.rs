@@ -138,13 +138,22 @@ async fn main() -> Result<()> {
         r#"{job="lcoalpacketdump",__name__=~"network_ip_tx_bps|network_ip_rx_bps"}"#;
     let network_results = query_prometheus(&client, network_query).await?;
 
+    println!("\nDebug: Found {} network results", network_results.len());
+    
     // Process network data (aggregate by NIC using IP mappings)
-    for result in network_results {
+    for result in &network_results {
+        let metric_name = result.metric.get("__name__");
+        let ip = result.metric.get("ip");
+        
+        println!("Debug: metric={:?}, ip={:?}, labels={:?}", 
+                 metric_name, ip, result.metric.keys().collect::<Vec<_>>());
+        
         if let (Some(metric_name), Some(ip)) =
             (result.metric.get("__name__"), result.metric.get("ip"))
         {
             if let Some(nic) = ip_to_nic.get(ip) {
                 let value: f64 = result.value.1.parse().unwrap_or(0.0);
+                println!("Debug: Matched IP {} to NIC {}, value={}", ip, nic, value);
 
                 let stats = nic_stats.entry(nic.clone()).or_default();
 
@@ -153,9 +162,13 @@ async fn main() -> Result<()> {
                 } else if metric_name == "network_ip_rx_bps" {
                     stats.rx_bps += value;
                 }
+            } else {
+                println!("Debug: IP {} not found in mapping", ip);
             }
         }
     }
+    
+    println!("\nDebug: IP to NIC mappings: {:?}", ip_to_nic);
 
     // Display results
     println!("\n=== NIC Statistics ===\n");
